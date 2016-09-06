@@ -28,7 +28,7 @@ import platform
 import Queue
 import datetime
 
-from database import Comic
+from database import Comic, Users
 
 class Bookmarker(threading.Thread):
     def __init__(self, dm):
@@ -42,9 +42,9 @@ class Bookmarker(threading.Thread):
         self.quit = True
         self.join()
         
-    def setBookmark(self, comic_id, pagenum):
+    def setBookmark(self, comic_id, pagenum, user = 1):
         # for now, don't defer the bookmark setting, maybe it's not needed
-        self.actualSetBookmark( comic_id, pagenum)
+        self.actualSetBookmark( comic_id, pagenum, user)
         #self.queue.put((comic_id, pagenum))
         
     def run(self):
@@ -63,21 +63,22 @@ class Bookmarker(threading.Thread):
             
         logging.debug("Bookmarker: stopped main loop.")
 
-    def actualSetBookmark(self, comic_id, pagenum):
+    def actualSetBookmark(self, comic_id, pagenum, user = 1):
                 
         if comic_id is not None:
             session = self.dm.Session()
-    
+            logging.debug("Bookmarker: User: {0}".format(user))
             obj = session.query(Comic).filter(Comic.id == int(comic_id)).first()
-            if obj is not None:
+            usrObj = session.query(Users).filter(Users.id == int(user)).filter(Users.comic_id == int(comic_id)).first()
+            if usrObj is not None:
                 try:
                     if pagenum.lower() == "clear":
-                        obj.lastread_ts =  None
-                        obj.lastread_page = None
+                        usrObj.lastread_ts =  None
+                        usrObj.lastread_page = None
                     elif int(pagenum) < obj.page_count:
-                        obj.lastread_ts = datetime.datetime.utcnow()
-                        obj.lastread_page = int(pagenum)
-                        #logging.debug("Bookmarker: about to commit boommak ts={0}".format(obj.lastread_ts))
+                        usrObj.lastread_ts = datetime.datetime.utcnow()
+                        usrObj.lastread_page = int(pagenum)
+                        logging.debug("Bookmarker: about to commit boommak ts={0}".format(usrObj.lastread_ts))
                 except Exception:
                     logging.error("Problem setting bookmark {} on comic {}".format(pagenum, comic_id))
                 else:

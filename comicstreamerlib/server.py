@@ -26,7 +26,7 @@ import tornado.ioloop
 import tornado.web
 import urllib
 import mimetypes
-from urllib2 import quote
+import urllib2
 
 
 from sqlalchemy import desc
@@ -67,7 +67,6 @@ from bonjour import BonjourThread
 from bookmarker import Bookmarker
 
 from library import Library
-
 # add webp test to imghdr in case it isn't there already
 def my_test_webp(h, f):
     if h.startswith(b'RIFF') and h[8:12] == b'WEBP':
@@ -85,6 +84,23 @@ def custom_get_current_user(handler):
         user = fix_username(user)
     return  user
 
+def custom_get_plex_user(handler):
+    cookieValue = handler.get_cookie("YTB-SID")
+    if cookieValue:
+        logging.debug(u"Cookie value is: {0}".format(cookieValue))
+        PlexAuth = "http://localhost:8087/auth/index.php?info=comicstreamer&session=" + cookieValue
+        uinfo = urllib2.urlopen(PlexAuth) #Hard coded. URL for getting user info from PlexAuth.
+        data = uinfo.read(500)
+        data = data.split("\n")
+        uinfo.close()
+        claimed_user = []
+        for line in data:
+            claimed_user.append(line)
+        #Set all details we wish to override here.
+        user = claimed_user[0]
+        logging.debug(u"User is: {0}".format(user))
+    return  user
+
 class BaseHandler(tornado.web.RequestHandler):
 
     @property
@@ -97,6 +113,9 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def get_current_user(self):
         return custom_get_current_user(self)
+
+    def get_plex_user(self):
+        return custom_get_plex_user(self)
     
 class GenericAPIHandler(BaseHandler):
     def validateAPIKey(self):
@@ -351,13 +370,13 @@ class CommandAPIHandler(GenericAPIHandler):
         cmd = self.get_argument(u"cmd", default=None)
         if cmd == "restart":
             logging.info("Restart command")
-            self.application.restart()
+#            self.application.restart()
         elif cmd == "reset":
             logging.info("Rebuild DB command")
-            self.application.rebuild()
+#            self.application.rebuild()
         elif cmd == "stop":
             logging.info("Stop command")
-            self.application.shutdown()
+#            self.application.shutdown()
 
 class ImageAPIHandler(GenericAPIHandler):
     def setContentType(self, image_data):
@@ -493,10 +512,10 @@ class ComicAPIHandler(JSONResultAPIHandler):
         self.write(resultSetToJson(result, "comics"))
 
 class ComicBookmarkAPIHandler(JSONResultAPIHandler):
-    def get(self, comic_id, pagenum):
+    def get(self, comic_id, pagenum, user = 1):
         self.validateAPIKey()
-        
-        self.application.bookmarker.setBookmark(comic_id, pagenum)
+        user = self.get_plex_user()
+        self.application.bookmarker.setBookmark(comic_id, pagenum, user)
     
         self.setContentType()
         response = { 'status': 0 }
@@ -791,6 +810,8 @@ class ReaderHandler(BaseHandler):
     @tornado.web.authenticated
     def get(self, comic_id):
 
+        PlexAuthUser = self.get_plex_user()
+        usrObj = self.library.getUserInfo(comic_id, PlexAuthUser)
         obj = self.library.getComic(comic_id)
         page_data = None
         if obj is not None:
@@ -802,17 +823,18 @@ class ReaderHandler(BaseHandler):
                 title = obj.series + u" #" + obj.issue
                 if obj.title is not None :
                     title +=  u" -- " + obj.title
-            if obj.lastread_page is None:
-                target_page = 0
-            else:
-                target_page=obj.lastread_page   
-                
+            target_page = 0
+            if usrObj is not None:
+                if usrObj.lastread_page is not None:
+                    target_page=usrObj.lastread_page
+
             self.render("cbreader.html",
                         title=title,
                         id=comic_id,
                         count=obj.page_count,
                         page=target_page,
-                        api_key=self.application.config['security']['api_key'])
+                        api_key=self.application.config['security']['api_key'],
+                        user=PlexAuthUser)
             
         def make_list(self, id, count):
             text = u""
@@ -832,10 +854,15 @@ class MainHandler(BaseHandler):
         stats['last_updated'] = utils.utc_to_local(stats['last_updated']).strftime("%Y-%m-%d %H:%M:%S")
         stats['created'] = utils.utc_to_local(stats['created']).strftime("%Y-%m-%d %H:%M:%S")
 
+        user = self.get_plex_user()
+
         recently_added_comics = self.library.recentlyAddedComics(10)
-        recently_read_comics = self.library.recentlyReadComics(10)
+        recently_read_comics = self.library.recentlyReadComics(10, user)
         roles_list = [role.name for role in self.library.getRoles()]
         random_comic = self.library.randomComic()
+
+#        for comic in recently_read_comics:
+#            logging.debug("Recent: recent comic={0}".format(comic.id))
 
         if random_comic is None:
             random_comic = type('fakecomic', (object,), 
@@ -1142,10 +1169,10 @@ class APIServer(tornado.web.Application):
             # Web Pages
             (self.webroot + r"/", MainHandler),
             (self.webroot + r"/(.*)\.html", GenericPageHandler),
-            (self.webroot + r"/about", AboutPageHandler),
-            (self.webroot + r"/control", ControlPageHandler),
-            (self.webroot + r"/configure", ConfigPageHandler),
-            (self.webroot + r"/log", LogPageHandler),
+#            (self.webroot + r"/about", AboutPageHandler),
+#            (self.webroot + r"/control", ControlPageHandler),
+#            (self.webroot + r"/configure", ConfigPageHandler),
+#            (self.webroot + r"/log", LogPageHandler),
             (self.webroot + r"/comiclist/browse", ComicListBrowserHandler),
             (self.webroot + r"/folders/browse(/.*)*", FoldersBrowserHandler),
             (self.webroot + r"/entities/browse(/.*)*", EntitiesBrowserHandler),
