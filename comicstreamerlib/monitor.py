@@ -133,7 +133,7 @@ class Monitor():
 
     def checkIfRemovedOrModified(self, comic, pathlist):
         remove = False
-        
+        logging.info(u"Made it to checking")
         def inFolderlist(filepath, pathlist):
             for p in pathlist:
                 if p in filepath:
@@ -143,10 +143,12 @@ class Monitor():
         if not (os.path.exists(comic.path)):
             # file is missing, remove it from the comic table, add it to deleted table
             logging.debug(u"Removing missing {0}".format(comic.path))
-            remove = True
+            logging.debug(u"As it turns out I'm not actually going to delete that file... It will probably reappear...")
+            #remove = True
         elif not inFolderlist(comic.path, pathlist):
             logging.debug(u"Removing unwanted {0}".format(comic.path))
-            remove = True
+            logging.debug(u"This will never happen and must be an error. Not deleting anything.")
+            #remove = True
         else:
             # file exists.  check the mod date.
             # if it's been modified, remove it, and it'll be re-added
@@ -155,12 +157,13 @@ class Monitor():
             prev = comic.mod_ts
             if curr != prev:
                 logging.debug(u"Removed modifed {0}".format(comic.path))
-                remove = True
+                logging.debug(u"File has been modified but i'll trust that it hasn't changed.")
+                #remove = True
            
         return remove
 
     def getComicMetadata(self, path):
-
+	print("Getting metadata: " + path)
         ca = ComicArchive(path,  default_image_path=AppFolders.imagePath("default.jpg"))
         
         if ca.seemsToBeAComicArchive():
@@ -183,8 +186,9 @@ class Monitor():
                 
             md.path = ca.path 
             md.page_count = ca.page_count
-            md.mod_ts = datetime.utcfromtimestamp(os.path.getmtime(ca.path))
-            md.filesize = os.path.getsize(md.path)
+            md.mod_ts = datetime.utcfromtimestamp(time.time())
+            md.filesize = md.page_count*100
+            #os.path.getsize(md.path)
             md.hash = ""
 
             #thumbnail generation
@@ -224,12 +228,15 @@ class Monitor():
         db_set = set()
         current_set = set()
         filelist = utils.get_recursive_filelist(dirs)
+        ts = time.time()
         for path in filelist:
-            current_set.add((path, datetime.utcfromtimestamp(os.path.getmtime(path))))
+            #current_set.add((path, datetime.utcfromtimestamp(os.path.getmtime(path))))
+            #getmtime from acd is intensive! and I don't care about Mtime. Disable this.
+            current_set.add((path, datetime.utcfromtimestamp(ts)))
         logging.info("NEW -- current_set size [%d]" % len(current_set))
 
         for comic_id, path, md_ts in self.library.getComicPaths():
-            db_set.add((path, md_ts))
+            db_set.add((path, datetime.utcfromtimestamp(ts)))
             ix[path] = comic_id
         to_add = current_set - db_set
         to_remove = db_set - current_set
@@ -254,7 +261,8 @@ class Monitor():
 
         self.setStatusDetail(u"Monitor: Removing missing or modified files from db ({0} files)".format(len(to_remove)), logging.INFO)
         if len(to_remove) > 0:
-            self.library.deleteComics(to_remove)
+            #self.library.deleteComics(to_remove)
+            logging.debug(u"Not going to remove anything")
 
         self.setStatusDetail(u"Monitor: {0} new files to scan...".format(len(filelist)), logging.INFO)
 
