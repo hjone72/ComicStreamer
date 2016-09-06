@@ -8,11 +8,13 @@ from sqlalchemy.orm import subqueryload
 
 import utils
 from database import Comic, DatabaseInfo, Person, Role, Credit, Character, GenericTag, Team, Location, \
-    StoryArc, Genre, DeletedComic
+    StoryArc, Genre, DeletedComic, Users
 from folders import AppFolders
 from comicapi.comicarchive import ComicArchive
 from comicapi.issuestring import IssueString
 
+import logging
+import logging.handlers
 
 class Library:
 
@@ -32,6 +34,17 @@ class Library:
 
     def getComic(self, comic_id):
         return self.getSession().query(Comic).get(int(comic_id))
+
+    def getUserInfo(self, comic_id, user):
+        ui = self.getSession().query(Users).filter(Users.id == int(user)).filter(Users.comic_id == int(comic_id)).first()
+        if ui is None:
+            #Build user/comic record.
+            record = Users()
+            record.id = user
+            record.comic_id = comic_id
+            self.getSession().add(record)
+        logging.debug(u"User Info: {0}".format(ui))
+        return ui
 
     def getComicPage(self, comic_id, page_number, max_height = None):
         (path, page_count) = self.getSession().query(Comic.path, Comic.page_count) \
@@ -82,11 +95,14 @@ class Library:
                    .order_by(Comic.added_ts.desc())\
                    .limit(limit)
 
-    def recentlyReadComics(self, limit = 10):
-        return self.getSession().query(Comic)\
-                   .filter(Comic.lastread_ts != "")\
-                   .order_by(Comic.lastread_ts.desc())\
-                   .limit(limit)
+    def recentlyReadComics(self, limit = 10, user = 1):
+        myRecentlyReadComics = self.getSession().query(Users).filter(Users.id == user).filter(Users.lastread_ts != "").order_by(Users.lastread_ts.desc()).limit(limit)
+        Comics = []
+        for comic in myRecentlyReadComics:
+            readComic = self.getSession().query(Comic).filter(Comic.id == int(comic.comic_id)).first()
+            if readComic is not None:
+                Comics.append(self.getSession().query(Comic).filter(Comic.id == int(comic.comic_id)).first())
+        return Comics
 
     def getRoles(self):
         return self.getSession().query(Role).all()

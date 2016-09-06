@@ -350,10 +350,21 @@ class DeletedComic(Base):
     def __unicode__(self):
         out = u"DeletedComic: {0}:{1}".format(self.id, self.comic_id)
         return out
+
+class Users(Base):
+    __tablename__ = "users"
+    __table_args__ = {'sqlite_autoincrement': True}
+    rid = Column(Integer, primary_key=True)
+    id = Column(Integer)
+    comic_id = Column(Integer)
+    lastread_page = Column(Integer)
+    lastread_ts = Column(DateTime)
+
+
 """
 class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True)
+ __tablename__ = "users"
+ id = Column(Integer, primary_key=True)
     name = Column(String)
     password_digest = Column(String)
 
