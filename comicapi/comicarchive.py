@@ -770,6 +770,9 @@ class ComicArchive:
             except IOError:
                 print >> sys.stderr, u"Error reading in page.  Substituting logo page."
                 image_data = ComicArchive.logo_data
+            except:
+                print "Unexpected error."
+                image_data = ComicArchive.logo_data
 
         return image_data
 

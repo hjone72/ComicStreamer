@@ -87,7 +87,8 @@ def get_recursive_filelist( pathlist ):
 					elif type(f) != unicode:
 						#it's probably a QString
 						f = unicode(f)
-					filelist.append(os.path.join(root,f))
+					if f != 'cvinfo' and f != 'cover.jpg':
+						filelist.append(os.path.join(root,f))
 		else:
 			filelist.append(p)
 	
@@ -161,7 +162,10 @@ def resize(img, box, out, fit=False):
     '''
 
     if type(img) != Image and type(img) == str:
-        img = Image.open(StringIO.StringIO(img))
+        try:
+            img = Image.open(StringIO.StringIO(img))
+        except:
+            img = Image.open(StringIO(open(AppFolders.imagePath("default.jpg")).read()))
 
     #preresize image with factor 2, 4, 8 and fast algorithm
     factor = 1
